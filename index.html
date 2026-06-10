@@ -105,7 +105,8 @@
 <div id="screen-unlock" class="screen">
   <div class="lock-card">
     <h2>Coffre verrouillé</h2>
-    <p>Entre ton super mot de passe pour déverrouiller.</p>
+    <button id="bio-unlock-btn" style="display:none;width:100%;padding:14px;font-size:16px;margin-bottom:14px;">🙂 Déverrouiller avec Face ID</button>
+    <p style="font-size:13px;color:#888;">ou avec ton super mot de passe :</p>
     <div class="field"><input type="password" id="unlock-pwd" autocomplete="current-password" placeholder="Super mot de passe"></div>
     <div class="error" id="unlock-error"></div>
     <button id="unlock-btn">Déverrouiller</button>
@@ -369,7 +370,7 @@ let hiddenTimer = null;
 let clipboardTimer = null;
 
 function $(id) { return document.getElementById(id); }
-function showScreen(name) { ['setup','unlock','vault'].forEach(s => { $('screen-'+s).classList.toggle('active', s === name); }); }
+function showScreen(name) { ['setup','unlock','vault'].forEach(s => { $('screen-'+s).classList.toggle('active', s === name); }); if (name === 'unlock' && typeof setupUnlockBiometric === 'function') setupUnlockBiometric(); }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
 function resetLockTimer() { if (lockTimer) clearTimeout(lockTimer); lockTimer = setTimeout(lock, LOCK_TIMEOUT_MS); }
 function lock() {
@@ -391,7 +392,7 @@ function lock() {
 async function saveVault() {
   if (!currentDek || !currentVaultMeta) return;
   const data = await encryptEntriesWithDek(entries, currentDek);
-  const vault = { v: 2, primary: currentVaultMeta.primary, recovery: currentVaultMeta.recovery, data };
+  const vault = { v: 2, primary: currentVaultMeta.primary, recovery: currentVaultMeta.recovery, biometric: currentVaultMeta.biometric || null, data };
   localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
 }
 function nextId() { return entries.length ? Math.max(...entries.map(e => e.id || 0)) + 1 : 1; }
@@ -539,56 +540,117 @@ function copyToClipboard(text) {
   });
 }
 
-// ── Face ID / Touch ID (WebAuthn) — verrou PAR APPAREIL, EN PLUS du mot de passe maître ──
-// Le mot de passe maître reste la clé cryptographique (le chiffrement en dépend).
-// Face ID est un gate supplémentaire au déverrouillage, activable par appareil.
-const BIO_KEY = 'mdp_bio_cred';
+// ── Face ID / Touch ID (WebAuthn PRF) — VRAI déverrouillage biométrique ──
+// Face ID fournit, via l'extension PRF, un secret stable propre à l'appareil ;
+// ce secret chiffre une COPIE de la DEK (clé de données). Face ID déverrouille
+// donc le coffre SANS mot de passe, et c'est sûr : le secret n'est jamais
+// stocké, il faut Face ID pour l'obtenir. Le mot de passe maître reste un
+// secours qui marche toujours (aucun risque de blocage).
+const BIO_KEY = 'mdp_bio_on';   // '1' si Face ID activé sur cet appareil
 function _b64url(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
 function _b64urlBuf(s) { s = s.replace(/-/g,'+').replace(/_/g,'/'); s += '='.repeat((4 - s.length % 4) % 4); const b = atob(s); const u = new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u.buffer; }
-function biometricEnabled() { return !!localStorage.getItem(BIO_KEY); }
+function biometricEnabled() { return localStorage.getItem(BIO_KEY) === '1'; }
 async function biometricSupported() {
   if (!window.PublicKeyCredential || !navigator.credentials) return false;
   try { return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch (e) { return false; }
 }
-async function biometricRegister() {
-  if (!(await biometricSupported())) { toast('Aucun capteur Face ID / Touch ID détecté'); return false; }
+// Obtient le secret PRF (32 octets) pour un credential + salt (déclenche Face ID).
+async function _prfGet(rawIdBuf, saltBuf) {
   try {
-    const cred = await navigator.credentials.create({ publicKey: {
+    const a = await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type: 'public-key', id: rawIdBuf }],
+      userVerification: 'required', timeout: 60000,
+      extensions: { prf: { eval: { first: saltBuf } } },
+    }});
+    const r = a.getClientExtensionResults();
+    if (r && r.prf && r.prf.results && r.prf.results.first) return new Uint8Array(r.prf.results.first);
+    return null;
+  } catch (e) { return null; }
+}
+// Active Face ID sur cet appareil (À FAIRE quand le coffre est DÉVERROUILLÉ).
+async function biometricRegister() {
+  if (!currentDek || !currentVaultMeta) { toast('Déverrouille le coffre d\'abord'); return false; }
+  if (!(await biometricSupported())) { toast('Aucun capteur Face ID / Touch ID'); return false; }
+  const salt = crypto.getRandomValues(new Uint8Array(32));
+  let cred;
+  try {
+    cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       rp: { name: 'Coffre MDP' },
       user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'coffre-mdp', displayName: 'Coffre MDP' },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+      extensions: { prf: { eval: { first: salt } } },
       timeout: 60000, attestation: 'none',
     }});
-    if (!cred) return false;
-    localStorage.setItem(BIO_KEY, _b64url(cred.rawId));
-    toast('Face ID activé ✓');
-    return true;
   } catch (e) { toast('Activation Face ID annulée'); return false; }
+  if (!cred) return false;
+  const rawId = new Uint8Array(cred.rawId);
+  // secret PRF : parfois dispo dès la création, sinon via un get()
+  let secret = null;
+  const ce = cred.getClientExtensionResults && cred.getClientExtensionResults();
+  if (ce && ce.prf && ce.prf.results && ce.prf.results.first) secret = new Uint8Array(ce.prf.results.first);
+  if (!secret) secret = await _prfGet(rawId.buffer, salt.buffer);
+  if (!secret) { toast('Face ID web (PRF) non supporté sur cet appareil/navigateur'); return false; }
+  const key = await crypto.subtle.importKey('raw', secret, { name: 'AES-GCM' }, false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, currentDek);
+  currentVaultMeta.biometric = { credId: _b64url(rawId), salt: _b64url(salt), iv: _b64url(iv), ct: _b64url(ct) };
+  localStorage.setItem(BIO_KEY, '1');
+  await saveVault();
+  toast('Face ID activé ✓ — déverrouille avec ton visage');
+  return true;
 }
-function biometricDisable() { localStorage.removeItem(BIO_KEY); toast('Face ID désactivé'); }
-async function biometricVerify() {
-  const id = localStorage.getItem(BIO_KEY);
-  if (!id) return true; // non activé → pas de gate
+async function biometricDisable() {
+  localStorage.removeItem(BIO_KEY);
+  if (currentVaultMeta) { currentVaultMeta.biometric = null; if (currentDek) await saveVault(); }
+  else { try { const v = JSON.parse(localStorage.getItem(VAULT_KEY)); if (v) { v.biometric = null; localStorage.setItem(VAULT_KEY, JSON.stringify(v)); } } catch (e) {} }
+  toast('Face ID désactivé');
+}
+// Déverrouillage par Face ID SEUL depuis l'écran verrouillé (sans mot de passe).
+async function biometricUnlockFlow() {
+  const err = $('unlock-error'); if (err) err.textContent = '';
+  let vault; try { vault = JSON.parse(localStorage.getItem(VAULT_KEY)); } catch (e) { vault = null; }
+  if (!vault || !vault.biometric) { if (err) err.textContent = 'Face ID non configuré sur cet appareil.'; return; }
+  const bio = vault.biometric;
+  const btn = $('bio-unlock-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Face ID…'; }
+  const secret = await _prfGet(_b64urlBuf(bio.credId), _b64urlBuf(bio.salt));
+  if (btn) { btn.disabled = false; btn.textContent = '🙂 Déverrouiller avec Face ID'; }
+  if (!secret) { if (err) err.textContent = 'Échec Face ID — utilise ton mot de passe ci-dessous.'; return; }
   try {
-    const a = await navigator.credentials.get({ publicKey: {
-      challenge: crypto.getRandomValues(new Uint8Array(32)),
-      allowCredentials: [{ type: 'public-key', id: _b64urlBuf(id) }],
-      userVerification: 'required', timeout: 60000,
-    }});
-    return !!a;
-  } catch (e) { return false; }
+    const key = await crypto.subtle.importKey('raw', secret, { name: 'AES-GCM' }, false, ['decrypt']);
+    const dekBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: _b64urlBuf(bio.iv) }, key, _b64urlBuf(bio.ct));
+    currentDek = new Uint8Array(dekBuf);
+    entries = await decryptEntriesWithDek(vault.data, currentDek);
+    currentVaultMeta = { primary: vault.primary, recovery: vault.recovery, biometric: vault.biometric };
+    masterPassword = null;
+    resetAttempts();
+    $('unlock-pwd').value = '';
+    showScreen('vault'); renderEntries(); resetLockTimer();
+  } catch (e) { if (err) err.textContent = 'Échec du déchiffrement Face ID — utilise ton mot de passe.'; }
 }
 function updateBioButton() {
   const b = $('btn-biometric'); if (!b) return;
   b.textContent = biometricEnabled() ? '🙂 Face ID ✓' : '🙂 Face ID';
-  b.title = biometricEnabled() ? 'Face ID activé sur cet appareil — toucher pour désactiver' : 'Activer Face ID sur cet appareil';
+  b.title = biometricEnabled() ? 'Face ID activé — toucher pour désactiver' : 'Activer Face ID sur cet appareil';
 }
 async function toggleBiometric() {
-  if (biometricEnabled()) biometricDisable();
+  if (biometricEnabled()) await biometricDisable();
   else await biometricRegister();
   updateBioButton();
+}
+// Sur l'écran verrouillé : montre le bouton Face ID si configuré + tente auto.
+function setupUnlockBiometric() {
+  const btn = $('bio-unlock-btn'); if (!btn) return;
+  let hasBio = false;
+  try { const v = JSON.parse(localStorage.getItem(VAULT_KEY)); hasBio = !!(v && v.biometric); } catch (e) {}
+  if (biometricEnabled() && hasBio) {
+    btn.style.display = '';
+    setTimeout(() => { biometricUnlockFlow().catch(() => {}); }, 350); // tentative auto (peut échouer sans geste sur iOS → bouton dispo)
+  } else {
+    btn.style.display = 'none';
+  }
 }
 
 async function init() {
@@ -658,7 +720,7 @@ $('setup-btn').addEventListener('click', async () => {
   const vault = await buildV2Vault(entries, p1, recoveryKey);
   // Recover the DEK in memory by unwrapping
   currentDek = await unwrapDek(vault.primary, p1);
-  currentVaultMeta = { primary: vault.primary, recovery: vault.recovery };
+  currentVaultMeta = { primary: vault.primary, recovery: vault.recovery, biometric: null };
   masterPassword = p1;
   localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
   seedNode.textContent = '';
@@ -712,11 +774,11 @@ $('recover-confirm').addEventListener('click', async () => {
     const dek = await unwrapDek(vault.recovery, rk);
     // Re-wrap primary with new master pwd
     const newPrimary = await wrapDek(dek, n1);
-    const updated = { v: 2, primary: newPrimary, recovery: vault.recovery, data: vault.data };
+    const updated = { v: 2, primary: newPrimary, recovery: vault.recovery, biometric: vault.biometric || null, data: vault.data };
     localStorage.setItem(VAULT_KEY, JSON.stringify(updated));
     // Auto-unlock
     currentDek = dek;
-    currentVaultMeta = { primary: newPrimary, recovery: vault.recovery };
+    currentVaultMeta = { primary: newPrimary, recovery: vault.recovery, biometric: vault.biometric || null };
     entries = await decryptEntriesWithDek(vault.data, dek);
     masterPassword = n1;
     resetAttempts();
@@ -742,15 +804,6 @@ $('unlock-btn').addEventListener('click', async () => {
     err.textContent = `Trop d'échecs. Réessaie dans ${remaining}s.`;
     return;
   }
-  // Gate Face ID (si activé sur cet appareil) — EN PLUS du mot de passe maître
-  if (biometricEnabled()) {
-    $('unlock-btn').disabled = true;
-    $('unlock-btn').textContent = 'Face ID…';
-    const bioOk = await biometricVerify();
-    $('unlock-btn').disabled = false;
-    $('unlock-btn').textContent = 'Déverrouiller';
-    if (!bioOk) { err.textContent = 'Face ID requis (échec ou annulé). Réessaie.'; return; }
-  }
   $('unlock-btn').disabled = true;
   $('unlock-btn').textContent = 'Déverrouillage...';
   try {
@@ -759,7 +812,7 @@ $('unlock-btn').addEventListener('click', async () => {
       // V2: unwrap DEK with primary password
       currentDek = await unwrapDek(vault.primary, pwd);
       entries = await decryptEntriesWithDek(vault.data, currentDek);
-      currentVaultMeta = { primary: vault.primary, recovery: vault.recovery };
+      currentVaultMeta = { primary: vault.primary, recovery: vault.recovery, biometric: vault.biometric || null };
     } else {
       // V1 legacy: decrypt, then auto-upgrade to V2 (without recovery key yet — user will prompt to create)
       entries = await decryptVaultV1(vault, pwd);
@@ -809,6 +862,7 @@ $('reset-btn').addEventListener('click', () => {
 $('btn-add').addEventListener('click', () => openEditModal(null));
 $('btn-lock').addEventListener('click', lock);
 $('btn-biometric').addEventListener('click', toggleBiometric);
+$('bio-unlock-btn').addEventListener('click', () => { biometricUnlockFlow().catch(() => {}); });
 $('btn-export').addEventListener('click', async () => {
   const vault = localStorage.getItem(VAULT_KEY);
   if (!vault) return;

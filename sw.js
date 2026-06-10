@@ -1,7 +1,7 @@
 // Service worker du Coffre MDP — cache la coquille statique pour l'usage hors-ligne.
 // Ne met JAMAIS en cache de données sensibles : le coffre vit dans localStorage
 // (jamais servi par le SW). Seuls les fichiers statiques publics sont cachés.
-const CACHE = 'coffre-mdp-v2';
+const CACHE = 'coffre-mdp-v3';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
