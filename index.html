@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<!-- Durcissement : aucune ressource ni connexion externe autorisée (anti-exfiltration). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1e3c72">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Coffre MDP">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<title>Coffre MDP</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); min-height: 100vh; color: #1a1a1a; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  header { background: rgba(255,255,255,0.97); padding: 16px 24px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  header h1 { margin: 0; font-size: 22px; color: #1e3c72; }
+  header .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { background: #2a5298; color: white; border: none; padding: 9px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.15s; }
+  button:hover { background: #1e3c72; }
+  button.secondary { background: #6c757d; }
+  button.secondary:hover { background: #545b62; }
+  button.danger { background: #dc3545; }
+  button.danger:hover { background: #b02a37; }
+  button.small { padding: 4px 10px; font-size: 12px; }
+  input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  input:focus, textarea:focus { outline: none; border-color: #2a5298; }
+  textarea { resize: vertical; min-height: 60px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px; }
+  .field { margin-bottom: 12px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .lock-card { background: rgba(255,255,255,0.97); padding: 40px; border-radius: 12px; max-width: 440px; margin: 80px auto; box-shadow: 0 8px 24px rgba(0,0,0,0.2); text-align: center; }
+  .lock-card h2 { margin-top: 0; color: #1e3c72; }
+  .lock-card p { color: #666; font-size: 14px; }
+  .lock-card .field { text-align: left; }
+  .lock-card button { width: 100%; padding: 12px; font-size: 16px; margin-top: 8px; }
+  .error { color: #dc3545; font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .toolbar { background: rgba(255,255,255,0.97); padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .toolbar input[type="search"] { flex: 1; min-width: 200px; }
+  .stats { font-size: 13px; color: #555; }
+  .entries { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .entry { background: rgba(255,255,255,0.97); border-radius: 10px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: start; }
+  .entry-icon { width: 64px; height: 64px; border-radius: 8px; background: #f0f3f8; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+  .entry-icon img { width: 100%; height: 100%; object-fit: contain; }
+  .entry-icon .placeholder { font-size: 24px; color: #999; font-weight: 700; }
+  .entry-info { min-width: 0; }
+  .entry-service { font-weight: 700; color: #1e3c72; font-size: 15px; word-break: break-word; }
+  .entry-meta { font-size: 13px; color: #444; margin-top: 4px; word-break: break-all; }
+  .entry-meta b { color: #555; font-weight: 600; }
+  .entry-notes { font-size: 12px; color: #777; margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
+  .entry-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .entry-photos img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: transform 0.1s; }
+  .entry-photos img:hover { transform: scale(1.05); }
+  .edit-photo-thumb { position: relative; display: inline-block; }
+  .edit-photo-thumb img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; }
+  .edit-photo-thumb .remove-btn { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #dc3545; color: white; border: 2px solid white; cursor: pointer; padding: 0; font-size: 12px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; }
+  .entry-pwd-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .pwd-value { font-family: 'Menlo', 'Monaco', monospace; background: #f0f3f8; padding: 3px 8px; border-radius: 4px; font-size: 13px; word-break: break-all; }
+  .entry-actions { display: flex; flex-direction: column; gap: 6px; }
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; padding: 20px; }
+  .modal-backdrop.active { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 24px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal h3 { margin-top: 0; color: #1e3c72; }
+  .modal .buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .password-input-row { display: flex; gap: 6px; }
+  .password-input-row input { flex: 1; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e3c72; color: white; padding: 12px 24px; border-radius: 8px; font-size: 14px; z-index: 200; opacity: 0; transition: opacity 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .toast.show { opacity: 1; }
+  body.hidden-blur .container, body.hidden-blur .modal-backdrop { filter: blur(18px); pointer-events: none; }
+  @media print {
+    body { display: none !important; }
+    html::before { content: 'Impression bloquée par sécurité.'; display: block; padding: 40px; font-family: sans-serif; }
+  }
+  @media (max-width: 600px) {
+    .lock-card { margin: 20px auto; padding: 24px; }
+    .entry { grid-template-columns: 48px 1fr; }
+    .entry-icon { width: 48px; height: 48px; }
+    .entry-actions { flex-direction: row; grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+
+<div id="screen-setup" class="screen">
+  <div class="lock-card">
+    <h2>Configuration initiale</h2>
+    <p>Choisis ton <b>super mot de passe</b>. C'est le seul moyen d'accéder à ton coffre. <br><strong>Si tu l'oublies, les données seront perdues.</strong></p>
+    <p style="font-size:12px;color:#555;background:#fff3cd;padding:8px;border-radius:6px;text-align:left;"><b>Exigences :</b> min 12 caractères, 1 maj, 1 min, 1 chiffre, 1 spécial (!@#$ etc.)</p>
+    <div class="field"><label>Super mot de passe</label><input type="password" id="setup-pwd1" autocomplete="new-password"></div>
+    <div class="field"><label>Confirme le super mot de passe</label><input type="password" id="setup-pwd2" autocomplete="new-password"></div>
+    <div class="error" id="setup-error"></div>
+    <button id="setup-btn">Créer mon coffre</button>
+    <p style="font-size:12px; color:#999; margin-top:14px;"><span id="seed-count"></span> entrées seront importées depuis ton fichier Word et chiffrées localement (AES-GCM, PBKDF2 250k itérations). Aucune donnée n'est envoyée sur internet.</p>
+  </div>
+</div>
+
+<div id="screen-unlock" class="screen">
+  <div class="lock-card">
+    <h2>Coffre verrouillé</h2>
+    <p>Entre ton super mot de passe pour déverrouiller.</p>
+    <div class="field"><input type="password" id="unlock-pwd" autocomplete="current-password" placeholder="Super mot de passe"></div>
+    <div class="error" id="unlock-error"></div>
+    <button id="unlock-btn">Déverrouiller</button>
+    <p style="font-size:13px; margin-top:14px;"><button id="forgot-btn" class="secondary small" style="width:auto;padding:6px 12px;">🔑 Mdp oublié ? Utiliser ma clé de récupération</button></p>
+    <p style="font-size:12px; color:#999; margin-top:8px;"><button id="reset-btn" class="danger small" style="width:auto;padding:5px 10px;">Réinitialiser le coffre</button></p>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-show-recovery">
+  <div class="modal" style="max-width:560px;">
+    <h3>🔑 Clé de récupération</h3>
+    <div style="background:#fff3cd;border:1px solid #ffeaa0;padding:12px;border-radius:6px;font-size:13px;color:#856404;">
+      <b>SAUVEGARDE CETTE CLÉ MAINTENANT.</b><br>
+      C'est le SEUL moyen d'accéder à ton coffre si tu oublies ton super mdp.<br>
+      Imprime-la, écris-la sur papier ou range-la dans un endroit sûr (PAS dans ce coffre).
+    </div>
+    <div id="recovery-key-display" style="font-family:Menlo,monospace;font-size:18px;font-weight:700;text-align:center;padding:20px;background:#1e3c72;color:white;border-radius:8px;letter-spacing:1px;margin:16px 0;word-break:break-all;"></div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+      <button class="secondary small" id="recovery-copy">📋 Copier</button>
+      <button class="secondary small" id="recovery-download">💾 Télécharger .txt</button>
+      <button class="secondary small" id="recovery-print">🖨 Imprimer</button>
+      <button class="secondary small" id="recovery-email">📧 Envoyer par email</button>
+    </div>
+    <div class="buttons" style="margin-top:20px;">
+      <button id="recovery-ack">J'ai sauvegardé ma clé ✓</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-recover">
+  <div class="modal">
+    <h3>🔑 Récupération avec la clé</h3>
+    <p style="font-size:13px;color:#666;">Entre la clé de récupération générée à la création de ton coffre, puis choisis un nouveau super mdp.</p>
+    <div class="field">
+      <label>Clé de récupération (format ABCDE-FGHIJ-...)</label>
+      <input type="text" id="recover-key" placeholder="ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456" autocomplete="off" style="font-family:monospace;letter-spacing:1px;">
+    </div>
+    <div class="field"><label>Nouveau super mdp</label><input type="password" id="recover-new1" autocomplete="new-password"></div>
+    <div class="field"><label>Confirme</label><input type="password" id="recover-new2" autocomplete="new-password"></div>
+    <div class="error" id="recover-error"></div>
+    <div class="buttons">
+      <button class="secondary" id="recover-cancel">Annuler</button>
+      <button id="recover-confirm">Récupérer</button>
+    </div>
+  </div>
+</div>
+
+<div id="screen-vault" class="screen">
+  <div class="container">
+    <header>
+      <h1>🔐 Coffre MDP</h1>
+      <div class="actions">
+        <button id="btn-add">+ Ajouter</button>
+        <button class="secondary" id="btn-export">Exporter</button>
+        <button class="secondary" id="btn-import">Importer</button>
+        <button class="secondary" id="btn-download-clean" title="Télécharger une copie de l'app sans données embarquées">App propre</button>
+        <button class="secondary" id="btn-recovery-key">🔑 Clé récup.</button>
+        <button class="secondary" id="btn-biometric" title="Activer Face ID sur cet appareil">🙂 Face ID</button>
+        <button class="secondary" id="btn-change-pwd">Changer mdp</button>
+        <button class="danger" id="btn-lock">Verrouiller</button>
+      </div>
+    </header>
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Rechercher (service, email, mdp, note)...">
+      <span class="stats" id="stats"></span>
+    </div>
+    <div class="entries" id="entries"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-edit">
+  <div class="modal">
+    <h3 id="modal-edit-title">Ajouter une entrée</h3>
+    <div class="field"><label>Service / Site</label><input type="text" id="edit-service" placeholder="ex. Gmail, Amazon..."></div>
+    <div class="field"><label>Identifiant / Email</label><input type="text" id="edit-login" autocomplete="off"></div>
+    <div class="field"><label>Mot de passe</label><div class="password-input-row"><input type="text" id="edit-password" autocomplete="off"><button class="secondary small" id="gen-pwd-btn">Générer</button></div></div>
+    <div class="field"><label>Notes</label><textarea id="edit-notes"></textarea></div>
+    <div class="field">
+      <label>Photos jointes</label>
+      <div id="edit-photos-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        <input type="file" id="edit-photos-file" accept="image/*" multiple style="font-size:12px;">
+        <button class="small" id="edit-photos-gallery" type="button">📁 Ajouter depuis les logos du document</button>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:4px;">Plusieurs photos possibles. Max 1 MB par photo upload.</div>
+    </div>
+    <div class="field">
+      <label>Icône</label>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div id="edit-icon-preview" style="width:56px;height:56px;border-radius:8px;background:#f0f3f8;display:flex;align-items:center;justify-content:center;overflow:hidden;"></div>
+        <button class="small" id="edit-icon-gallery" type="button">📁 Choisir un logo du document</button>
+        <input type="file" id="edit-icon-file" accept="image/*" style="font-size:12px;">
+        <button class="small secondary" id="edit-icon-clear" type="button">Retirer</button>
+      </div>
+    </div>
+    <div class="buttons"><button class="secondary" id="edit-cancel">Annuler</button><button id="edit-save">Enregistrer</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-change-pwd">
+  <div class="modal">
+    <h3>Changer le super mot de passe</h3>
+    <div class="field"><label>Mot de passe actuel</label><input type="password" id="cp-old" autocomplete="current-password"></div>
+    <div class="field"><label>Nouveau mot de passe</label><input type="password" id="cp-new1" autocomplete="new-password"></div>
+    <div class="field"><label>Confirme le nouveau mot de passe</label><input type="password" id="cp-new2" autocomplete="new-password"></div>
+    <div class="error" id="cp-error"></div>
+    <div class="buttons"><button class="secondary" id="cp-cancel">Annuler</button><button id="cp-save">Changer</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-photo-view" style="background:rgba(0,0,0,0.85);">
+  <div style="max-width:95vw;max-height:95vh;display:flex;flex-direction:column;align-items:center;gap:10px;">
+    <img id="photo-view-img" style="max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;background:white;">
+    <button class="secondary" id="photo-view-close" style="background:white;color:#1e3c72;">Fermer</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-gallery">
+  <div class="modal" style="max-width:700px;">
+    <h3 id="gallery-title">Choisir un logo extrait du document Word</h3>
+    <p id="gallery-help" style="font-size:12px;color:#666;"></p>
+    <input type="text" id="gallery-search" placeholder="Filtrer (nom de fichier)..." style="margin-bottom:10px;">
+    <div id="gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;max-height:50vh;overflow-y:auto;padding:6px;background:#f6f8fb;border-radius:8px;"></div>
+    <div class="buttons">
+      <button class="secondary" id="gallery-cancel">Fermer</button>
+      <button id="gallery-add-selected" style="display:none;">Ajouter sélectionnés</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-import">
+  <div class="modal">
+    <h3>Importer un coffre chiffré</h3>
+    <p style="font-size:13px;color:#666;">Sélectionne un fichier <code>.coffre</code> exporté précédemment. Tu auras besoin du super mdp qui l'a chiffré.</p>
+    <div class="field"><input type="file" id="import-file" accept=".coffre,.json,.txt"></div>
+    <div class="field"><label>Super mdp du fichier importé</label><input type="password" id="import-pwd"></div>
+    <div class="error" id="import-error"></div>
+    <div class="field">
+      <label><input type="radio" name="import-mode" value="merge" checked> Fusionner avec le coffre actuel</label>
+      <label><input type="radio" name="import-mode" value="replace"> Remplacer le coffre actuel</label>
+    </div>
+    <div class="buttons"><button class="secondary" id="import-cancel">Annuler</button><button id="import-confirm">Importer</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script id="seed-data" type="application/json">[]</script>
+<script id="gallery-data" type="application/json">[]</script>
+
+<script>
+'use strict';
+const VAULT_KEY = 'mdp_vault_v1';
+const ATTEMPTS_KEY = 'mdp_attempts';
+const PBKDF2_ITERATIONS = 600000; // OWASP 2024 recommendation
+const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
+const HIDDEN_LOCK_MS = 30 * 1000;
+const CLIPBOARD_CLEAR_MS = 30 * 1000;
+
+function b64encode(buf) {
+  const bytes = new Uint8Array(buf);
+  let str = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    str += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(str);
+}
+function b64decode(str) {
+  const bin = atob(str);
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function deriveKey(password, salt, iterations) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, baseKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+// V1 (legacy) encryption: single key derived from master password
+async function encryptVaultV1(entries, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt, PBKDF2_ITERATIONS);
+  const plaintext = new TextEncoder().encode(JSON.stringify(entries));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+  return { v: 1, salt: b64encode(salt), iter: PBKDF2_ITERATIONS, iv: b64encode(iv), ct: b64encode(ciphertext) };
+}
+async function decryptVaultV1(vault, password) {
+  const salt = b64decode(vault.salt);
+  const iv = b64decode(vault.iv);
+  const ct = b64decode(vault.ct);
+  const key = await deriveKey(password, salt, vault.iter || PBKDF2_ITERATIONS);
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
+// V2 encryption: separate DEK (data encryption key), wrapped by KEK from password OR recovery key
+async function wrapDek(dek, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const kek = await deriveKey(password, salt, PBKDF2_ITERATIONS);
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, kek, dek);
+  return { salt: b64encode(salt), iv: b64encode(iv), iter: PBKDF2_ITERATIONS, ct: b64encode(ct) };
+}
+async function unwrapDek(wrapped, password) {
+  const salt = b64decode(wrapped.salt);
+  const iv = b64decode(wrapped.iv);
+  const ct = b64decode(wrapped.ct);
+  const kek = await deriveKey(password, salt, wrapped.iter || PBKDF2_ITERATIONS);
+  const dekBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, kek, ct);
+  return new Uint8Array(dekBuf);
+}
+async function encryptEntriesWithDek(entries, dek) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const dekKey = await crypto.subtle.importKey('raw', dek, 'AES-GCM', false, ['encrypt']);
+  const pt = new TextEncoder().encode(JSON.stringify(entries));
+  const ct = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, dekKey, pt);
+  return { iv: b64encode(iv), ct: b64encode(ct) };
+}
+async function decryptEntriesWithDek(dataBlob, dek) {
+  const iv = b64decode(dataBlob.iv);
+  const ct = b64decode(dataBlob.ct);
+  const dekKey = await crypto.subtle.importKey('raw', dek, 'AES-GCM', false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, dekKey, ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function buildV2Vault(entries, masterPwd, recoveryKey) {
+  const dek = crypto.getRandomValues(new Uint8Array(32));
+  const data = await encryptEntriesWithDek(entries, dek);
+  const primary = await wrapDek(dek, masterPwd);
+  const recovery = recoveryKey ? await wrapDek(dek, recoveryKey) : null;
+  return { v: 2, primary, recovery, data };
+}
+function generateRecoveryKey() {
+  // 30 chars from unambiguous alphabet, grouped 5-5-5-5-5-5
+  const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0/I/1
+  const arr = new Uint8Array(30);
+  crypto.getRandomValues(arr);
+  let s = '';
+  for (let i = 0; i < 30; i++) s += ALPHA[arr[i] % ALPHA.length];
+  return s.match(/.{5}/g).join('-');
+}
+function normalizeRecoveryKey(s) {
+  return (s || '').toUpperCase().replace(/[^A-Z2-9]/g, '');
+}
+
+let entries = [];
+let masterPassword = null;
+let currentDek = null;        // Uint8Array, in memory only while unlocked
+let currentVaultMeta = null;  // { primary, recovery } — wrapped DEKs, persisted
+let editingId = null;
+let editingIconData = '';
+let editingPhotos = [];
+let searchQuery = '';
+let lockTimer = null;
+let hiddenTimer = null;
+let clipboardTimer = null;
+
+function $(id) { return document.getElementById(id); }
+function showScreen(name) { ['setup','unlock','vault'].forEach(s => { $('screen-'+s).classList.toggle('active', s === name); }); }
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
+function resetLockTimer() { if (lockTimer) clearTimeout(lockTimer); lockTimer = setTimeout(lock, LOCK_TIMEOUT_MS); }
+function lock() {
+  masterPassword = null;
+  if (currentDek) currentDek.fill(0);
+  currentDek = null;
+  currentVaultMeta = null;
+  entries = [];
+  editingPhotos = []; editingIconData = '';
+  searchQuery = '';
+  if ($('search')) $('search').value = '';
+  if ($('entries')) $('entries').innerHTML = '';
+  if (lockTimer) clearTimeout(lockTimer);
+  if (hiddenTimer) clearTimeout(hiddenTimer);
+  if (clipboardTimer) { clearTimeout(clipboardTimer); navigator.clipboard.writeText('').catch(()=>{}); }
+  $('unlock-pwd').value = '';
+  showScreen('unlock');
+}
+async function saveVault() {
+  if (!currentDek || !currentVaultMeta) return;
+  const data = await encryptEntriesWithDek(entries, currentDek);
+  const vault = { v: 2, primary: currentVaultMeta.primary, recovery: currentVaultMeta.recovery, data };
+  localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
+}
+function nextId() { return entries.length ? Math.max(...entries.map(e => e.id || 0)) + 1 : 1; }
+function escHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function generatePassword(length = 20) {
+  const sets = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*+=?';
+  const arr = new Uint32Array(length);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, n => sets[n % sets.length]).join('');
+}
+
+// Master password strength validation
+function checkMasterStrength(p) {
+  const errs = [];
+  if (p.length < 12) errs.push('min 12 caractères');
+  if (!/[a-z]/.test(p)) errs.push('1 minuscule');
+  if (!/[A-Z]/.test(p)) errs.push('1 majuscule');
+  if (!/\d/.test(p)) errs.push('1 chiffre');
+  if (!/[^A-Za-z0-9]/.test(p)) errs.push('1 caractère spécial');
+  return errs;
+}
+
+// Brute-force protection
+function getAttempts() {
+  try { return JSON.parse(localStorage.getItem(ATTEMPTS_KEY) || '{"count":0,"until":0}'); }
+  catch(e) { return {count:0, until:0}; }
+}
+function setAttempts(a) { localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(a)); }
+function resetAttempts() { localStorage.removeItem(ATTEMPTS_KEY); }
+function getLockoutDelayMs(count) {
+  if (count >= 10) return 5 * 60 * 1000;
+  if (count >= 5) return 30 * 1000;
+  if (count >= 3) return 3 * 1000;
+  return 0;
+}
+
+// Clipboard auto-clear
+function scheduleClipboardClear() {
+  if (clipboardTimer) clearTimeout(clipboardTimer);
+  clipboardTimer = setTimeout(() => {
+    navigator.clipboard.writeText('').catch(()=>{});
+    toast('Presse-papier effacé');
+  }, CLIPBOARD_CLEAR_MS);
+}
+
+function renderEntries() {
+  updateBioButton();
+  const q = searchQuery.toLowerCase().trim();
+  const filtered = entries.filter(e => {
+    if (!q) return true;
+    return [e.service, e.login, e.password, e.notes].some(f => (f || '').toLowerCase().includes(q));
+  });
+  filtered.sort((a, b) => (a.service || '').toLowerCase().localeCompare((b.service || '').toLowerCase()));
+  const container = $('entries');
+  container.innerHTML = '';
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="background:rgba(255,255,255,0.9);padding:30px;border-radius:10px;text-align:center;color:#666;">Aucune entrée.</div>';
+  } else {
+    for (const e of filtered) {
+      const div = document.createElement('div');
+      div.className = 'entry';
+      const iconHtml = e.img_data ? `<img src="${e.img_data}" alt="" onerror="this.style.display='none'">` : `<div class="placeholder">${escHtml((e.service || '?').trim().charAt(0).toUpperCase())}</div>`;
+      div.innerHTML = `
+        <div class="entry-icon">${iconHtml}</div>
+        <div class="entry-info">
+          <div class="entry-service">${escHtml(e.service || '(sans nom)')}</div>
+          ${e.login ? `<div class="entry-meta"><b>Login :</b> ${escHtml(e.login)} <button class="small secondary" data-copy="${escHtml(e.login)}">copier</button></div>` : ''}
+          ${e.password ? `<div class="entry-pwd-row entry-meta"><b>MDP :</b> <span class="pwd-value">${escHtml(e.password)}</span> <button class="small secondary" data-copy="${escHtml(e.password)}">copier</button></div>` : ''}
+          ${e.notes ? `<div class="entry-notes">${escHtml(e.notes)}</div>` : ''}
+          ${(e.photos && e.photos.length) ? `<div class="entry-photos">${e.photos.map((p,i)=>`<img src="${p.data}" alt="${escHtml(p.name||'photo')}" data-view-photo="${e.id}|${i}">`).join('')}</div>` : ''}
+        </div>
+        <div class="entry-actions">
+          <button class="small" data-edit="${e.id}">Éditer</button>
+          <button class="small danger" data-delete="${e.id}">Suppr</button>
+        </div>
+      `;
+      container.appendChild(div);
+    }
+  }
+  $('stats').textContent = `${filtered.length} / ${entries.length} entrées`;
+}
+
+function updateIconPreview() {
+  const prev = $('edit-icon-preview');
+  if (editingIconData) prev.innerHTML = `<img src="${editingIconData}" style="width:100%;height:100%;object-fit:contain;">`;
+  else prev.innerHTML = `<span style="color:#999;font-size:11px;">aucune</span>`;
+}
+function renderEditPhotos() {
+  const list = $('edit-photos-list');
+  list.innerHTML = '';
+  editingPhotos.forEach((p, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'edit-photo-thumb';
+    thumb.innerHTML = `<img src="${p.data}" alt="${escHtml(p.name||'')}" title="${escHtml(p.name||'')}"><button type="button" class="remove-btn" data-rm-photo="${i}">×</button>`;
+    list.appendChild(thumb);
+  });
+  if (editingPhotos.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:#999;">Aucune photo.</div>';
+  }
+}
+function openEditModal(id) {
+  editingId = id;
+  const e = id ? entries.find(x => x.id === id) : { service:'',login:'',password:'',notes:'',img_data:'',photos:[] };
+  if (!e) return;
+  $('modal-edit-title').textContent = id ? 'Éditer l\'entrée' : 'Ajouter une entrée';
+  $('edit-service').value = e.service || '';
+  $('edit-login').value = e.login || '';
+  $('edit-password').value = e.password || '';
+  $('edit-notes').value = e.notes || '';
+  editingIconData = e.img_data || '';
+  editingPhotos = (e.photos || []).map(p => ({ name: p.name||'', data: p.data }));
+  $('edit-icon-file').value = '';
+  $('edit-photos-file').value = '';
+  updateIconPreview();
+  renderEditPhotos();
+  $('modal-edit').classList.add('active');
+  $('edit-service').focus();
+}
+function closeEditModal() { $('modal-edit').classList.remove('active'); editingId = null; }
+async function saveEntry() {
+  const service = $('edit-service').value.trim();
+  const login = $('edit-login').value.trim();
+  const password = $('edit-password').value;
+  const notes = $('edit-notes').value.trim();
+  if (!service && !login && !password) { toast('Au moins un champ doit être rempli'); return; }
+  if (editingId) {
+    const e = entries.find(x => x.id === editingId);
+    if (e) Object.assign(e, { service, login, password, notes, img_data: editingIconData, photos: editingPhotos.slice() });
+  } else {
+    entries.push({ id: nextId(), service, login, password, notes, img_data: editingIconData, photos: editingPhotos.slice() });
+  }
+  await saveVault(); closeEditModal(); renderEntries(); toast('Enregistré');
+}
+async function deleteEntry(id) {
+  const e = entries.find(x => x.id === id);
+  if (!e) return;
+  if (!confirm(`Supprimer "${e.service || e.login || 'cette entrée'}" ?`)) return;
+  entries = entries.filter(x => x.id !== id);
+  await saveVault(); renderEntries(); toast('Supprimé');
+}
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    toast('Copié — sera effacé dans 30s');
+    scheduleClipboardClear();
+  });
+}
+
+// ── Face ID / Touch ID (WebAuthn) — verrou PAR APPAREIL, EN PLUS du mot de passe maître ──
+// Le mot de passe maître reste la clé cryptographique (le chiffrement en dépend).
+// Face ID est un gate supplémentaire au déverrouillage, activable par appareil.
+const BIO_KEY = 'mdp_bio_cred';
+function _b64url(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function _b64urlBuf(s) { s = s.replace(/-/g,'+').replace(/_/g,'/'); s += '='.repeat((4 - s.length % 4) % 4); const b = atob(s); const u = new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u.buffer; }
+function biometricEnabled() { return !!localStorage.getItem(BIO_KEY); }
+async function biometricSupported() {
+  if (!window.PublicKeyCredential || !navigator.credentials) return false;
+  try { return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch (e) { return false; }
+}
+async function biometricRegister() {
+  if (!(await biometricSupported())) { toast('Aucun capteur Face ID / Touch ID détecté'); return false; }
+  try {
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name: 'Coffre MDP' },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'coffre-mdp', displayName: 'Coffre MDP' },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      timeout: 60000, attestation: 'none',
+    }});
+    if (!cred) return false;
+    localStorage.setItem(BIO_KEY, _b64url(cred.rawId));
+    toast('Face ID activé ✓');
+    return true;
+  } catch (e) { toast('Activation Face ID annulée'); return false; }
+}
+function biometricDisable() { localStorage.removeItem(BIO_KEY); toast('Face ID désactivé'); }
+async function biometricVerify() {
+  const id = localStorage.getItem(BIO_KEY);
+  if (!id) return true; // non activé → pas de gate
+  try {
+    const a = await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type: 'public-key', id: _b64urlBuf(id) }],
+      userVerification: 'required', timeout: 60000,
+    }});
+    return !!a;
+  } catch (e) { return false; }
+}
+function updateBioButton() {
+  const b = $('btn-biometric'); if (!b) return;
+  b.textContent = biometricEnabled() ? '🙂 Face ID ✓' : '🙂 Face ID';
+  b.title = biometricEnabled() ? 'Face ID activé sur cet appareil — toucher pour désactiver' : 'Activer Face ID sur cet appareil';
+}
+async function toggleBiometric() {
+  if (biometricEnabled()) biometricDisable();
+  else await biometricRegister();
+  updateBioButton();
+}
+
+async function init() {
+  const vaultRaw = localStorage.getItem(VAULT_KEY);
+  if (vaultRaw) {
+    showScreen('unlock');
+    setTimeout(() => $('unlock-pwd').focus(), 100);
+  } else {
+    const seedNode = $('seed-data');
+    let seed = [];
+    if (seedNode && seedNode.textContent.trim()) {
+      try { seed = JSON.parse(seedNode.textContent); } catch (e) { seed = []; }
+    }
+    $('seed-count').textContent = seed.length;
+    showScreen('setup');
+    setTimeout(() => $('setup-pwd1').focus(), 100);
+  }
+}
+
+function showRecoveryKeyModal(key) {
+  $('recovery-key-display').textContent = key;
+  $('modal-show-recovery').classList.add('active');
+  $('recovery-copy').onclick = () => { navigator.clipboard.writeText(key).then(() => toast('Clé copiée')); };
+  $('recovery-download').onclick = () => {
+    const text = `CLE DE RECUPERATION COFFRE MDP\nGénérée le ${new Date().toLocaleString('fr-FR')}\n\nCONSERVE-LA EN LIEU SUR. C'EST LE SEUL MOYEN DE RECUPERER L'ACCES SI TU OUBLIES TON SUPER MDP.\n\nClé :\n\n${key}\n`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `cle-recuperation-coffre-${new Date().toISOString().slice(0,10)}.txt`;
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+  $('recovery-email').onclick = () => {
+    const to = prompt('Email destinataire (ton propre email) :');
+    if (!to) return;
+    const subject = encodeURIComponent('Clé de récupération coffre MDP');
+    const body = encodeURIComponent(
+      `Conserve ce message en lieu sûr.\n\n` +
+      `C'est le SEUL moyen de récupérer l'accès à ton coffre MDP si tu oublies ton super mot de passe.\n\n` +
+      `Date : ${new Date().toLocaleString('fr-FR')}\n\n` +
+      `--- CLÉ DE RÉCUPÉRATION ---\n\n` +
+      `${key}\n\n` +
+      `---\n\n` +
+      `Astuce : marque cet email avec une étoile ou archive-le dans un dossier "Important".\n\n` +
+      `Ne le supprime jamais.\n`
+    );
+    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${subject}&body=${body}`;
+  };
+  $('recovery-print').onclick = () => {
+    const w = window.open('', '_blank');
+    w.document.write(`<html><body style="font-family:sans-serif;padding:40px;"><h1>Clé de récupération coffre MDP</h1><p>Générée le ${new Date().toLocaleString('fr-FR')}</p><p style="background:#ffe;padding:12px;border:1px solid #ccc;">CONSERVE EN LIEU SÛR. Seul moyen de récupérer l'accès si tu oublies ton super mdp.</p><pre style="font-size:24px;font-weight:bold;background:#000;color:#fff;padding:20px;border-radius:8px;">${key}</pre></body></html>`);
+    w.document.close(); w.print();
+  };
+}
+
+$('setup-btn').addEventListener('click', async () => {
+  const p1 = $('setup-pwd1').value;
+  const p2 = $('setup-pwd2').value;
+  const err = $('setup-error'); err.textContent = '';
+  const strengthErrs = checkMasterStrength(p1);
+  if (strengthErrs.length) { err.textContent = 'Manque : ' + strengthErrs.join(', ') + '.'; return; }
+  if (p1 !== p2) { err.textContent = 'Les deux mots de passe ne correspondent pas.'; return; }
+  const seedNode = $('seed-data');
+  let seed = []; try { seed = JSON.parse(seedNode.textContent); } catch(e){}
+  entries = seed.map((e, i) => ({ id: i+1, service: e.service||'', login: e.login||'', password: e.password||'', notes: e.notes||'', img_data: e.img_data||'', photos: e.photos||[] }));
+  // Generate DEK + recovery key
+  const recoveryKey = generateRecoveryKey();
+  const vault = await buildV2Vault(entries, p1, recoveryKey);
+  // Recover the DEK in memory by unwrapping
+  currentDek = await unwrapDek(vault.primary, p1);
+  currentVaultMeta = { primary: vault.primary, recovery: vault.recovery };
+  masterPassword = p1;
+  localStorage.setItem(VAULT_KEY, JSON.stringify(vault));
+  seedNode.textContent = '';
+  $('setup-pwd1').value = ''; $('setup-pwd2').value = '';
+  showScreen('vault'); renderEntries(); resetLockTimer();
+  showRecoveryKeyModal(recoveryKey);
+  toast('Coffre créé. ' + entries.length + ' entrées.');
+});
+$('recovery-ack').addEventListener('click', () => $('modal-show-recovery').classList.remove('active'));
+
+async function generateAndAttachRecoveryKey() {
+  const recoveryKey = generateRecoveryKey();
+  const wrapped = await wrapDek(currentDek, recoveryKey);
+  currentVaultMeta.recovery = wrapped;
+  await saveVault();
+  showRecoveryKeyModal(recoveryKey);
+}
+
+// Show recovery key (regenerate)
+$('btn-recovery-key').addEventListener('click', async () => {
+  const action = currentVaultMeta?.recovery
+    ? confirm('Une clé de récupération existe déjà.\n\nOK = en générer une NOUVELLE (l\'ancienne ne fonctionnera plus).\nAnnuler = ne rien faire.')
+    : true;
+  if (action) {
+    await generateAndAttachRecoveryKey();
+  }
+});
+
+// "Forgot password" flow
+$('forgot-btn').addEventListener('click', () => {
+  $('recover-key').value = ''; $('recover-new1').value = ''; $('recover-new2').value = ''; $('recover-error').textContent = '';
+  $('modal-recover').classList.add('active');
+  setTimeout(() => $('recover-key').focus(), 100);
+});
+$('recover-cancel').addEventListener('click', () => $('modal-recover').classList.remove('active'));
+$('recover-confirm').addEventListener('click', async () => {
+  const err = $('recover-error'); err.textContent = '';
+  const rkRaw = $('recover-key').value;
+  const rkNorm = normalizeRecoveryKey(rkRaw);
+  const rk = rkNorm.match(/.{5}/g)?.join('-') || rkNorm;
+  if (rkNorm.length !== 30) { err.textContent = 'Clé invalide (30 caractères attendus).'; return; }
+  const n1 = $('recover-new1').value;
+  const n2 = $('recover-new2').value;
+  const sErrs = checkMasterStrength(n1);
+  if (sErrs.length) { err.textContent = 'Nouveau mdp insuffisant : ' + sErrs.join(', ') + '.'; return; }
+  if (n1 !== n2) { err.textContent = 'Les deux nouveaux mdp ne correspondent pas.'; return; }
+  $('recover-confirm').disabled = true; $('recover-confirm').textContent = 'Récupération...';
+  try {
+    const vault = JSON.parse(localStorage.getItem(VAULT_KEY));
+    if (vault.v !== 2 || !vault.recovery) throw new Error('no_recovery');
+    const dek = await unwrapDek(vault.recovery, rk);
+    // Re-wrap primary with new master pwd
+    const newPrimary = await wrapDek(dek, n1);
+    const updated = { v: 2, primary: newPrimary, recovery: vault.recovery, data: vault.data };
+    localStorage.setItem(VAULT_KEY, JSON.stringify(updated));
+    // Auto-unlock
+    currentDek = dek;
+    currentVaultMeta = { primary: newPrimary, recovery: vault.recovery };
+    entries = await decryptEntriesWithDek(vault.data, dek);
+    masterPassword = n1;
+    resetAttempts();
+    $('modal-recover').classList.remove('active');
+    showScreen('vault'); renderEntries(); resetLockTimer();
+    toast('Récupération réussie. Nouveau mdp actif.');
+  } catch(e) {
+    err.textContent = e.message === 'no_recovery' ? 'Aucune clé de récupération configurée.' : 'Clé invalide.';
+  } finally {
+    $('recover-confirm').disabled = false; $('recover-confirm').textContent = 'Récupérer';
+  }
+});
+
+$('unlock-btn').addEventListener('click', async () => {
+  const pwd = $('unlock-pwd').value;
+  const err = $('unlock-error'); err.textContent = '';
+  if (!pwd) return;
+  // Brute-force lockout check
+  const att = getAttempts();
+  const now = Date.now();
+  if (att.until && now < att.until) {
+    const remaining = Math.ceil((att.until - now) / 1000);
+    err.textContent = `Trop d'échecs. Réessaie dans ${remaining}s.`;
+    return;
+  }
+  // Gate Face ID (si activé sur cet appareil) — EN PLUS du mot de passe maître
+  if (biometricEnabled()) {
+    $('unlock-btn').disabled = true;
+    $('unlock-btn').textContent = 'Face ID…';
+    const bioOk = await biometricVerify();
+    $('unlock-btn').disabled = false;
+    $('unlock-btn').textContent = 'Déverrouiller';
+    if (!bioOk) { err.textContent = 'Face ID requis (échec ou annulé). Réessaie.'; return; }
+  }
+  $('unlock-btn').disabled = true;
+  $('unlock-btn').textContent = 'Déverrouillage...';
+  try {
+    const vault = JSON.parse(localStorage.getItem(VAULT_KEY));
+    if (vault.v === 2) {
+      // V2: unwrap DEK with primary password
+      currentDek = await unwrapDek(vault.primary, pwd);
+      entries = await decryptEntriesWithDek(vault.data, currentDek);
+      currentVaultMeta = { primary: vault.primary, recovery: vault.recovery };
+    } else {
+      // V1 legacy: decrypt, then auto-upgrade to V2 (without recovery key yet — user will prompt to create)
+      entries = await decryptVaultV1(vault, pwd);
+      const newVault = await buildV2Vault(entries, pwd, null);
+      currentDek = await unwrapDek(newVault.primary, pwd);
+      currentVaultMeta = { primary: newVault.primary, recovery: newVault.recovery };
+      localStorage.setItem(VAULT_KEY, JSON.stringify(newVault));
+    }
+    masterPassword = pwd;
+    resetAttempts();
+    $('unlock-pwd').value = '';
+    showScreen('vault'); renderEntries(); resetLockTimer();
+    // If no recovery key yet, prompt to create one
+    if (!currentVaultMeta.recovery) {
+      setTimeout(() => {
+        if (confirm('⚠️ Aucune clé de récupération définie.\n\nSi tu oublies ton super mdp, tes données seront PERDUES.\n\nGénérer une clé de récupération maintenant ?')) {
+          generateAndAttachRecoveryKey();
+        }
+      }, 300);
+    }
+  } catch(e) {
+    const newCount = (att.count || 0) + 1;
+    const delay = getLockoutDelayMs(newCount);
+    setAttempts({ count: newCount, until: delay ? Date.now() + delay : 0 });
+    let msg = `Mot de passe incorrect (${newCount} échec${newCount>1?'s':''}).`;
+    if (delay) msg += ` Verrouillage ${Math.ceil(delay/1000)}s.`;
+    err.textContent = msg;
+  } finally {
+    $('unlock-btn').disabled = false;
+    $('unlock-btn').textContent = 'Déverrouiller';
+  }
+});
+$('unlock-pwd').addEventListener('keydown', e => { if (e.key === 'Enter') $('unlock-btn').click(); });
+$('setup-pwd2').addEventListener('keydown', e => { if (e.key === 'Enter') $('setup-btn').click(); });
+
+$('reset-btn').addEventListener('click', () => {
+  const txt = prompt('⚠️ DESTRUCTION DÉFINITIVE du coffre chiffré.\n\nPour confirmer, tape exactement le mot :\n\nSUPPRIMER');
+  if (txt === 'SUPPRIMER') {
+    localStorage.removeItem(VAULT_KEY);
+    localStorage.removeItem(ATTEMPTS_KEY);
+    location.reload();
+  } else if (txt !== null) {
+    toast('Annulé : confirmation invalide');
+  }
+});
+
+$('btn-add').addEventListener('click', () => openEditModal(null));
+$('btn-lock').addEventListener('click', lock);
+$('btn-biometric').addEventListener('click', toggleBiometric);
+$('btn-export').addEventListener('click', async () => {
+  const vault = localStorage.getItem(VAULT_KEY);
+  if (!vault) return;
+  const date = new Date().toISOString().slice(0,10);
+  const blob = new Blob([vault], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `coffre-mdp-${date}.coffre`; a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Coffre exporté (chiffré)');
+});
+$('btn-download-clean').addEventListener('click', async () => {
+  // Fetch the current HTML source and wipe seed-data + gallery-data + vault localStorage instructions
+  try {
+    const resp = await fetch(window.location.href);
+    let html = await resp.text();
+    // Empty the seed-data script
+    const endTag = '<' + '/script>';
+    const reSeed = new RegExp('<script id="seed-data"[^>]*>[\\s\\S]*?' + endTag);
+    const reGal = new RegExp('<script id="gallery-data"[^>]*>[\\s\\S]*?' + endTag);
+    html = html.replace(reSeed, '<script id="seed-data" type="application/json">[]' + endTag);
+    html = html.replace(reGal, '<script id="gallery-data" type="application/json">[]' + endTag);
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'mdp-app-propre.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('Copie propre téléchargée (sans seed ni galerie)');
+  } catch(e) {
+    toast('Échec : ' + (e.message || 'erreur'));
+  }
+});
+$('btn-import').addEventListener('click', () => {
+  $('import-file').value = ''; $('import-pwd').value = ''; $('import-error').textContent = '';
+  $('modal-import').classList.add('active');
+});
+
+$('edit-cancel').addEventListener('click', closeEditModal);
+$('edit-save').addEventListener('click', saveEntry);
+$('gen-pwd-btn').addEventListener('click', () => { $('edit-password').value = generatePassword(20); });
+$('edit-icon-file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (f.size > 200 * 1024) { toast('Image trop lourde (max 200 KB).'); e.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = ev => { editingIconData = ev.target.result; updateIconPreview(); };
+  reader.readAsDataURL(f);
+});
+$('edit-icon-clear').addEventListener('click', () => { editingIconData = ''; $('edit-icon-file').value = ''; updateIconPreview(); });
+
+// PHOTOS attached to entry
+$('edit-photos-file').addEventListener('change', async e => {
+  const files = Array.from(e.target.files);
+  for (const f of files) {
+    if (f.size > 1024 * 1024) { toast(`"${f.name}" > 1 MB, ignoré`); continue; }
+    const data = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = ev => res(ev.target.result);
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+    editingPhotos.push({ name: f.name, data });
+  }
+  $('edit-photos-file').value = '';
+  renderEditPhotos();
+});
+$('edit-photos-list').addEventListener('click', e => {
+  const idx = e.target.dataset.rmPhoto;
+  if (idx !== undefined) {
+    editingPhotos.splice(parseInt(idx), 1);
+    renderEditPhotos();
+  }
+});
+
+// PHOTO viewer
+$('photo-view-close').addEventListener('click', () => $('modal-photo-view').classList.remove('active'));
+
+// GALLERY (logos from docx) — supports two modes: 'icon' (single-pick) and 'photos' (multi-pick)
+let galleryData = [];
+let galleryMode = 'icon'; // 'icon' | 'photos'
+let gallerySelectedIdx = new Set();
+try { galleryData = JSON.parse(document.getElementById('gallery-data').textContent || '[]'); } catch(e) {}
+function openGallery() {
+  const grid = $('gallery-grid');
+  const q = $('gallery-search').value.toLowerCase();
+  const items = galleryData.map((g, i) => ({ g, i })).filter(({g}) => g.name.toLowerCase().includes(q));
+  grid.innerHTML = '';
+  items.forEach(({g, i}) => {
+    const btn = document.createElement('button');
+    const selected = gallerySelectedIdx.has(i);
+    btn.style.cssText = `background:white;border:2px solid ${selected ? '#2a5298' : '#ddd'};border-radius:6px;padding:4px;cursor:pointer;height:80px;display:flex;align-items:center;justify-content:center;position:relative;`;
+    btn.title = g.name;
+    btn.innerHTML = `<img src="${g.data}" style="max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">${selected ? '<span style="position:absolute;top:2px;right:2px;background:#2a5298;color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</span>' : ''}`;
+    btn.addEventListener('click', () => {
+      if (galleryMode === 'icon') {
+        editingIconData = g.data;
+        updateIconPreview();
+        $('modal-gallery').classList.remove('active');
+      } else {
+        if (gallerySelectedIdx.has(i)) gallerySelectedIdx.delete(i);
+        else gallerySelectedIdx.add(i);
+        openGallery();
+      }
+    });
+    grid.appendChild(btn);
+  });
+  if (items.length === 0) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#999;">Aucun logo.</div>';
+  // Update title/help/button based on mode
+  if (galleryMode === 'icon') {
+    $('gallery-title').textContent = 'Choisir un logo (icône)';
+    $('gallery-help').textContent = `${galleryData.length} logos. Clique pour attribuer comme icône.`;
+    $('gallery-add-selected').style.display = 'none';
+  } else {
+    $('gallery-title').textContent = 'Choisir des photos à joindre';
+    $('gallery-help').textContent = `${galleryData.length} logos. Clique pour sélectionner/désélectionner, puis "Ajouter".`;
+    $('gallery-add-selected').style.display = '';
+    $('gallery-add-selected').textContent = `Ajouter (${gallerySelectedIdx.size})`;
+  }
+}
+$('edit-icon-gallery').addEventListener('click', () => {
+  galleryMode = 'icon'; gallerySelectedIdx.clear();
+  $('gallery-search').value=''; openGallery();
+  $('modal-gallery').classList.add('active');
+});
+$('edit-photos-gallery').addEventListener('click', () => {
+  galleryMode = 'photos'; gallerySelectedIdx.clear();
+  $('gallery-search').value=''; openGallery();
+  $('modal-gallery').classList.add('active');
+});
+$('gallery-add-selected').addEventListener('click', () => {
+  for (const i of gallerySelectedIdx) {
+    const g = galleryData[i];
+    editingPhotos.push({ name: g.name, data: g.data });
+  }
+  gallerySelectedIdx.clear();
+  renderEditPhotos();
+  $('modal-gallery').classList.remove('active');
+});
+$('gallery-cancel').addEventListener('click', () => $('modal-gallery').classList.remove('active'));
+$('gallery-search').addEventListener('input', openGallery);
+
+$('btn-change-pwd').addEventListener('click', () => {
+  $('cp-old').value=''; $('cp-new1').value=''; $('cp-new2').value=''; $('cp-error').textContent='';
+  $('modal-change-pwd').classList.add('active');
+});
+$('cp-cancel').addEventListener('click', () => $('modal-change-pwd').classList.remove('active'));
+$('cp-save').addEventListener('click', async () => {
+  const err = $('cp-error'); const old = $('cp-old').value; const n1 = $('cp-new1').value; const n2 = $('cp-new2').value;
+  err.textContent = '';
+  if (old !== masterPassword) { err.textContent = 'Ancien mot de passe incorrect.'; return; }
+  const sErrs = checkMasterStrength(n1);
+  if (sErrs.length) { err.textContent = 'Manque : ' + sErrs.join(', ') + '.'; return; }
+  if (n1 !== n2) { err.textContent = 'Les deux nouveaux ne correspondent pas.'; return; }
+  // Re-wrap DEK with new master pwd, keep recovery wrap unchanged
+  currentVaultMeta.primary = await wrapDek(currentDek, n1);
+  masterPassword = n1;
+  await saveVault();
+  $('modal-change-pwd').classList.remove('active'); toast('Super mdp changé');
+});
+
+$('import-cancel').addEventListener('click', () => $('modal-import').classList.remove('active'));
+$('import-confirm').addEventListener('click', async () => {
+  const f = $('import-file').files[0]; const pwd = $('import-pwd').value; const err = $('import-error');
+  err.textContent = '';
+  if (!f) { err.textContent = 'Sélectionne un fichier.'; return; }
+  if (!pwd) { err.textContent = 'Entre le mdp du fichier.'; return; }
+  try {
+    const text = await f.text(); const vault = JSON.parse(text);
+    let imported;
+    if (vault.v === 2) {
+      const ddek = await unwrapDek(vault.primary, pwd);
+      imported = await decryptEntriesWithDek(vault.data, ddek);
+    } else {
+      imported = await decryptVaultV1(vault, pwd);
+    }
+    const mode = document.querySelector('input[name="import-mode"]:checked').value;
+    if (mode === 'replace') {
+      entries = imported.map((e, i) => ({ ...e, id: i + 1 }));
+    } else {
+      const baseId = nextId();
+      const merged = imported.map((e, i) => ({ ...e, id: baseId + i }));
+      entries = entries.concat(merged);
+    }
+    await saveVault(); $('modal-import').classList.remove('active');
+    renderEntries(); toast('Importé : ' + imported.length + ' entrées');
+  } catch(e) { err.textContent = 'Échec : mdp incorrect ou fichier invalide.'; }
+});
+
+$('entries').addEventListener('click', e => {
+  const t = e.target; resetLockTimer();
+  if (t.dataset.edit) openEditModal(parseInt(t.dataset.edit));
+  else if (t.dataset.delete) deleteEntry(parseInt(t.dataset.delete));
+  else if (t.dataset.copy !== undefined) copyToClipboard(t.dataset.copy);
+  else if (t.dataset.viewPhoto) {
+    const [eid, pidx] = t.dataset.viewPhoto.split('|');
+    const ent = entries.find(x => x.id === parseInt(eid));
+    if (ent && ent.photos && ent.photos[pidx]) {
+      $('photo-view-img').src = ent.photos[pidx].data;
+      $('modal-photo-view').classList.add('active');
+    }
+  }
+});
+
+$('search').addEventListener('input', e => { searchQuery = e.target.value; renderEntries(); resetLockTimer(); });
+['mousemove','keydown','click'].forEach(evt => { document.addEventListener(evt, () => { if (masterPassword) resetLockTimer(); }); });
+
+// Auto-lock when tab/window is hidden for HIDDEN_LOCK_MS
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    document.body.classList.add('hidden-blur');
+    if (masterPassword) {
+      hiddenTimer = setTimeout(() => { if (document.hidden) lock(); }, HIDDEN_LOCK_MS);
+    }
+  } else {
+    document.body.classList.remove('hidden-blur');
+    if (hiddenTimer) { clearTimeout(hiddenTimer); hiddenTimer = null; }
+  }
+});
+
+// Block context menu / print shortcuts (best-effort, not 100% reliable)
+window.addEventListener('keydown', e => {
+  if (masterPassword && (e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+    e.preventDefault();
+    toast('Impression bloquée');
+  }
+});
+document.querySelectorAll('.modal-backdrop').forEach(bd => { bd.addEventListener('click', e => { if (e.target === bd) bd.classList.remove('active'); }); });
+
+init();
+
+// PWA : enregistre le service worker (hors-ligne + installable). Ne fait rien
+// hors HTTPS (ex. ouverture en fichier local) — dégradation propre.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
