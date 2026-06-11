@@ -1011,7 +1011,9 @@ $('cp-cancel').addEventListener('click', () => $('modal-change-pwd').classList.r
 $('cp-save').addEventListener('click', async () => {
   const err = $('cp-error'); const old = $('cp-old').value; const n1 = $('cp-new1').value; const n2 = $('cp-new2').value;
   err.textContent = '';
-  if (old !== masterPassword) { err.textContent = 'Ancien mot de passe incorrect.'; return; }
+  // Vérifie l'ancien mdp en tentant de déverrouiller la DEK (marche aussi après Face ID)
+  try { await unwrapDek(currentVaultMeta.primary, old); }
+  catch (e) { err.textContent = 'Ancien mot de passe incorrect.'; return; }
   const sErrs = checkMasterStrength(n1);
   if (sErrs.length) { err.textContent = 'Manque : ' + sErrs.join(', ') + '.'; return; }
   if (n1 !== n2) { err.textContent = 'Les deux nouveaux ne correspondent pas.'; return; }
@@ -1066,13 +1068,13 @@ $('entries').addEventListener('click', e => {
 });
 
 $('search').addEventListener('input', e => { searchQuery = e.target.value; renderEntries(); resetLockTimer(); });
-['mousemove','keydown','click'].forEach(evt => { document.addEventListener(evt, () => { if (masterPassword) resetLockTimer(); }); });
+['mousemove','keydown','click'].forEach(evt => { document.addEventListener(evt, () => { if (currentDek) resetLockTimer(); }); });
 
 // Auto-lock when tab/window is hidden for HIDDEN_LOCK_MS
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     document.body.classList.add('hidden-blur');
-    if (masterPassword) {
+    if (currentDek) {
       hiddenTimer = setTimeout(() => { if (document.hidden) lock(); }, HIDDEN_LOCK_MS);
     }
   } else {
@@ -1083,7 +1085,7 @@ document.addEventListener('visibilitychange', () => {
 
 // Block context menu / print shortcuts (best-effort, not 100% reliable)
 window.addEventListener('keydown', e => {
-  if (masterPassword && (e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+  if (currentDek && (e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
     e.preventDefault();
     toast('Impression bloquée');
   }
