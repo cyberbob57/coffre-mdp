@@ -584,15 +584,16 @@ async function biometricRegister() {
       extensions: { prf: { eval: { first: salt } } },
       timeout: 60000, attestation: 'none',
     }});
-  } catch (e) { toast('Activation Face ID annulée'); return false; }
-  if (!cred) return false;
+  } catch (e) { alert('Face ID — échec de création :\n' + (e.name || '?') + '\n' + (e.message || e) + '\n\n(Si « NotAllowedError » : annulé ou bloqué en mode app installée → essaie dans Safari.)'); return false; }
+  if (!cred) { alert('Face ID — aucun credential renvoyé.'); return false; }
   const rawId = new Uint8Array(cred.rawId);
   // secret PRF : parfois dispo dès la création, sinon via un get()
   let secret = null;
-  const ce = cred.getClientExtensionResults && cred.getClientExtensionResults();
-  if (ce && ce.prf && ce.prf.results && ce.prf.results.first) secret = new Uint8Array(ce.prf.results.first);
-  if (!secret) secret = await _prfGet(rawId.buffer, salt.buffer);
-  if (!secret) { toast('Face ID web (PRF) non supporté sur cet appareil/navigateur'); return false; }
+  const ce = (cred.getClientExtensionResults && cred.getClientExtensionResults()) || {};
+  const prfEnabled = !!(ce.prf && ce.prf.enabled);
+  if (ce.prf && ce.prf.results && ce.prf.results.first) secret = new Uint8Array(ce.prf.results.first);
+  if (!secret) { try { secret = await _prfGet(rawId.buffer, salt.buffer); } catch (e) {} }
+  if (!secret) { alert('Face ID — credential OK mais PRF indisponible.\nprf.enabled = ' + prfEnabled + '\n\n→ Ton iOS/navigateur ne fournit pas le secret PRF (souvent iOS < 18 ou mode app installée). Le mot de passe reste ta protection.'); return false; }
   const key = await crypto.subtle.importKey('raw', secret, { name: 'AES-GCM' }, false, ['encrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, currentDek);
